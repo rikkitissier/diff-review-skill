@@ -41,7 +41,7 @@ works before anything is pushed.
 | Flag | Effect |
 |---|---|
 | `--repo <path>` | Repo to diff. Default: cwd. **Always pass this explicitly** in a multi-repo workspace — Bash's cwd persists between calls and may not be the repo you changed. |
-| `--base <ref>` | Base ref. Default: `origin/HEAD`, else main, else master. Pass it for repos whose default branch isn't main (`hs-app` uses `develop`, `core-api` uses `master`). |
+| `--base <ref>` | Base ref. Default: `origin/HEAD`, else main, else master. Pass it for repos whose default branch isn't `main` (e.g. `develop` or `master`). |
 | `--pr <number>` | Review an open GitHub PR via `gh` instead of local state. |
 | `--committed` | Committed changes only — skip working tree and untracked files. |
 | `--out <file>` | Output path. Default: a temp file named after repo and branch. |

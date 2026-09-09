@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "rikki-tools",
-  "description": "Personal Claude Code experiments, shared early. Not yet blessed for the claude-tools repo.",
+  "description": "Personal Claude Code experiments, shared early.",
   "owner": {
     "name": "Rikki Tissier"
   },

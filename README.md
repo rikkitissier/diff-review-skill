@@ -11,11 +11,14 @@ included, so the agent knows exactly what you meant.
 ## Install
 
 ```
-/plugin marketplace add <owner>/diff-review
+/plugin marketplace add rikkitissier/diff-review-skill
 /plugin install diff-review@rikki-tools
 ```
 
 Then `/diff-review`, or ask for a review of the current changes.
+
+The plugin installs as `diff-review@rikki-tools` — the marketplace name comes
+from `marketplace.json`, not from the repo or directory name.
 
 ## What you get
 
