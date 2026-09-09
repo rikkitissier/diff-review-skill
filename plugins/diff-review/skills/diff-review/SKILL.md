@@ -16,8 +16,8 @@ formats them into a prompt the user pastes back into the agent.
 ```sh
 # The skill's own directory differs between a plugin install and a personal
 # ~/.claude/skills copy, so resolve it rather than hardcoding either.
-DR="$(find "$HOME/.claude/plugins/marketplaces" -maxdepth 5 -type d \
-        -path '*/plugins/diff-review/skills/diff-review' 2>/dev/null | head -1)"
+DR="$(find "$HOME/.claude/plugins/cache" -maxdepth 6 -type d \
+        -path '*/diff-review/*/skills/diff-review' 2>/dev/null | sort | tail -1)"
 [ -n "$DR" ] || DR="$HOME/.claude/skills/diff-review"
 
 node "$DR/generate.mjs" --repo <repo path>
