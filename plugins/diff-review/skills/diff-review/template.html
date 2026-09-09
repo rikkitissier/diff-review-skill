@@ -1,0 +1,1566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diff Review</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-sunken: #f6f8fa;
+  --bg-raised: #ffffff;
+  --bg-hover: #eaeef2;
+  --border: #d1d9e0;
+  --border-strong: #b7bfc7;
+  --fg: #1f2328;
+  --fg-muted: #59636e;
+  --fg-subtle: #818b98;
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+  --add-bg: #e6ffec;
+  --add-bg-strong: #ccffd8;
+  --add-gutter: #d2fedb;
+  --del-bg: #ffebe9;
+  --del-bg-strong: #ffcecb;
+  --del-gutter: #ffd7d5;
+  --green: #1a7f37;
+  --red: #cf222e;
+  --amber: #9a6700;
+  --amber-bg: #fff8c5;
+  --purple: #8250df;
+  --shadow: 0 1px 3px rgba(31,35,40,.12), 0 8px 24px rgba(66,74,83,.12);
+  --topbar-h: 54px;
+  --tok-comment: #59636e;
+  --tok-kw: #cf222e;
+  --tok-string: #0a3069;
+  --tok-num: #0550ae;
+  --tok-type: #953800;
+  --tok-fn: #8250df;
+  --tok-tag: #116329;
+  --tok-var: #953800;
+  --tok-meta: #6639ba;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1117; --bg-sunken: #010409; --bg-raised: #151b23; --bg-hover: #212830;
+  --border: #3d444d; --border-strong: #4b535d;
+  --fg: #f0f6fc; --fg-muted: #9198a1; --fg-subtle: #656c76;
+  --accent: #4493f8; --accent-fg: #ffffff;
+  --add-bg: #12261e; --add-bg-strong: #1b4721; --add-gutter: #143d24;
+  --del-bg: #25171c; --del-bg-strong: #542426; --del-gutter: #3c1618;
+  --green: #3fb950; --red: #f85149; --amber: #d29922; --amber-bg: #3b2300; --purple: #ab7df8;
+  --shadow: 0 1px 3px rgba(1,4,9,.5), 0 8px 24px rgba(1,4,9,.4);
+  --tok-comment: #9198a1;
+  --tok-kw: #ff7b72;
+  --tok-string: #a5d6ff;
+  --tok-num: #79c0ff;
+  --tok-type: #ffa657;
+  --tok-fn: #d2a8ff;
+  --tok-tag: #7ee787;
+  --tok-var: #ffa657;
+  --tok-meta: #d2a8ff;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font: 14px/1.5 var(--sans);
+  color: var(--fg);
+  background: var(--bg-sunken);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+
+/* ---------- layout ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+}
+.topbar .id { min-width: 0; }
+.topbar .repo { font-weight: 600; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.topbar .refs { font-family: var(--mono); font-size: 12px; color: var(--fg-muted); }
+.topbar .sub { font-size: 12px; color: var(--fg-muted); margin-top: 1px; }
+.spacer { flex: 1; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg-raised); color: var(--fg);
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+}
+.btn:hover { background: var(--bg-hover); }
+.btn.primary { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.subtle { border-color: transparent; background: transparent; color: var(--fg-muted); }
+.btn.subtle:hover { background: var(--bg-hover); color: var(--fg); }
+.btn.danger:hover { background: var(--del-bg); border-color: var(--red); color: var(--red); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn .count {
+  min-width: 18px; padding: 0 5px; border-radius: 9px;
+  background: rgba(255,255,255,.25); font-size: 11px; font-weight: 600; text-align: center;
+}
+
+.main { display: grid; grid-template-columns: var(--sidebar-w, 340px) minmax(0, 1fr); align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr); } .sidebar { display: none; } }
+
+/* ---------- sidebar ---------- */
+.sidebar {
+  position: sticky; top: var(--topbar-h);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-raised);
+  padding: 12px 8px 32px;
+}
+.resizer {
+  position: absolute; top: 0; right: -2px; bottom: 0; width: 5px;
+  cursor: col-resize; z-index: 5;
+}
+.resizer:hover, .resizer.dragging { background: var(--accent); }
+body.resizing { cursor: col-resize; user-select: none; }
+
+.sidebar h2 {
+  margin: 0 8px 8px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+.filter { width: 100%; margin: 0 0 10px; }
+.filter input {
+  width: 100%; padding: 5px 8px; font: inherit; font-size: 13px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--fg);
+}
+.treekids { margin-left: 9px; padding-left: 5px; border-left: 1px solid var(--border); }
+.treeempty { padding: 6px 8px; font-size: 12px; color: var(--fg-subtle); }
+.filerow, .dirrow {
+  display: grid; grid-template-columns: 11px 15px minmax(0,1fr) auto auto;
+  align-items: center; gap: 5px;
+  width: 100%; padding: 4px 8px 4px 6px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--fg); text-align: left; font-size: 13px;
+}
+.dirrow:hover { background: var(--bg-hover); }
+.dirrow .tw { font-size: 11px; line-height: 1; color: var(--fg-muted); text-align: center; }
+.dirrow .dname {
+  font-weight: 500; color: var(--fg-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  direction: rtl; text-align: left;
+}
+.dirrow:hover .dname { color: var(--fg); }
+
+/* Icons carry state by colour; the glyph inside repeats it so added and
+   modified stay distinguishable without relying on hue alone. */
+.icon { display: block; width: 15px; height: 15px; }
+.icon.folder { color: var(--fg-subtle); }
+.dirrow:hover .icon.folder { color: var(--fg-muted); }
+.icon.added { color: var(--green); }
+.icon.deleted { color: var(--red); }
+.icon.modified { color: var(--amber); }
+.icon.renamed { color: var(--purple); }
+.filerow.viewed .icon { color: var(--fg-subtle); }
+.filerow:hover { background: var(--bg-hover); }
+.filerow.active { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.filerow.viewed .fname { color: var(--fg-subtle); text-decoration: line-through; }
+.filerow .fname {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar .delta {
+  font-family: var(--sans); font-variant-numeric: tabular-nums;
+  font-size: 11px; white-space: nowrap; color: var(--fg-subtle);
+}
+.delta { font-family: var(--mono); font-size: 11px; white-space: nowrap; color: var(--fg-subtle); }
+.delta .p { color: var(--green); }
+.delta .m { color: var(--red); }
+.cbadge {
+  min-width: 17px; padding: 0 5px; border-radius: 9px;
+  background: var(--accent); color: var(--accent-fg);
+  font-size: 10px; font-weight: 700; text-align: center; line-height: 17px;
+}
+
+/* ---------- content ---------- */
+.content { padding: 16px; min-width: 0; }
+.notice {
+  margin-bottom: 14px; padding: 10px 12px; border-radius: 6px;
+  background: var(--amber-bg); border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  color: var(--fg); font-size: 13px;
+}
+
+.summary {
+  margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-raised); overflow: hidden;
+}
+.summary > header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 1px solid var(--border); background: var(--bg-sunken);
+  font-size: 13px; font-weight: 600;
+}
+.summary .body { padding: 12px; }
+.summary textarea { min-height: 76px; }
+
+.file {
+  margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-raised);
+}
+.file > header {
+  position: sticky; top: var(--topbar-h); z-index: 10;
+  border-radius: 7px 7px 0 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+.file.collapsed > header { border-bottom: 0; border-radius: 7px; }
+.file .path {
+  font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file .path .dir { color: var(--fg-muted); font-weight: 400; }
+.file .oldpath { font-family: var(--mono); font-size: 11px; color: var(--fg-muted); }
+.chev { width: 20px; height: 20px; border: 0; background: transparent; color: var(--fg-muted); padding: 0; line-height: 1; }
+.chev:hover { color: var(--fg); }
+.viewedbox { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--fg-muted); white-space: nowrap; }
+
+.diffbody { overflow-x: auto; font-family: var(--mono); font-size: 12px; }
+.diffbody.wrap { overflow-x: visible; }
+.hunkhdr {
+  padding: 3px 10px; color: var(--fg-muted);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  white-space: pre;
+}
+.file .hunkhdr:first-child { border-top: 0; }
+
+.row { display: grid; grid-template-columns: 46px 46px 22px minmax(0,1fr); }
+.row .ln {
+  padding: 0 6px; text-align: right; color: var(--fg-subtle);
+  user-select: none; font-size: 11px; line-height: 20px;
+  border-right: 1px solid transparent;
+}
+.row .plus {
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .08s;
+}
+.row:hover .plus { opacity: 1; }
+.row .plus button {
+  width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px;
+  background: var(--accent); color: var(--accent-fg);
+  font-size: 13px; font-weight: 700; line-height: 16px;
+}
+.row .code {
+  padding: 0 10px 0 4px; white-space: pre; line-height: 20px; tab-size: 2;
+}
+.wrap .row .code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.row .code .mk { color: var(--fg-subtle); user-select: none; }
+.row.add { background: var(--add-bg); }
+.row.add .ln { background: var(--add-gutter); }
+.row.add .code .mk { color: var(--green); }
+.row.del { background: var(--del-bg); }
+.row.del .ln { background: var(--del-gutter); }
+.row.del .code .mk { color: var(--red); }
+.row.commented { box-shadow: inset 3px 0 0 var(--accent); }
+.row.target { animation: flash 1.4s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--accent) 25%, transparent); } }
+
+.code .tok-comment { color: var(--tok-comment); font-style: italic; }
+.code .tok-kw { color: var(--tok-kw); }
+.code .tok-string { color: var(--tok-string); }
+.code .tok-num { color: var(--tok-num); }
+.code .tok-type { color: var(--tok-type); }
+.code .tok-fn { color: var(--tok-fn); }
+.code .tok-tag { color: var(--tok-tag); }
+.code .tok-var { color: var(--tok-var); }
+.code .tok-meta { color: var(--tok-meta); }
+
+.binary, .empty-file { padding: 14px; color: var(--fg-muted); font-size: 13px; }
+
+/* ---------- comments ---------- */
+.threads { border-top: 1px solid var(--border); background: var(--bg-sunken); }
+.threads:empty { display: none; }
+.inline-slot { background: var(--bg-sunken); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.inline-slot:empty { display: none; border: 0; }
+
+.comment {
+  margin: 8px 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 6px; background: var(--bg-raised);
+  font-family: var(--sans); font-size: 13px;
+}
+.comment header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px; font-size: 11px; color: var(--fg-muted);
+}
+.comment .anchor { font-family: var(--mono); }
+.comment .tag {
+  padding: 1px 6px; border-radius: 20px; font-size: 10px; font-weight: 600;
+  background: var(--bg-hover); color: var(--fg-muted);
+}
+.comment .tag.moved { background: var(--amber-bg); color: var(--amber); }
+.comment .tag.orphan { background: var(--del-bg); color: var(--red); }
+.comment .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment .acts { margin-left: auto; display: flex; gap: 2px; }
+.comment .acts button {
+  border: 0; background: transparent; color: var(--fg-muted);
+  font-size: 11px; padding: 2px 6px; border-radius: 4px;
+}
+.comment .acts button:hover { background: var(--bg-hover); color: var(--fg); }
+.comment .acts button.del:hover { color: var(--red); }
+
+.composer {
+  margin: 8px 10px; padding: 10px;
+  border: 1px solid var(--accent); border-radius: 6px; background: var(--bg-raised);
+  font-family: var(--sans);
+}
+.composer .ctx {
+  margin: -2px 0 8px; font-family: var(--mono); font-size: 11px; color: var(--fg-muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+textarea {
+  width: 100%; min-height: 68px; resize: vertical;
+  padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--fg);
+  font: 13px/1.5 var(--sans);
+}
+textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.composer .actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.composer .hint { font-size: 11px; color: var(--fg-subtle); margin-left: auto; }
+
+/* ---------- modal ---------- */
+.scrim {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(0,0,0,.5);
+}
+.modal {
+  display: flex; flex-direction: column; gap: 12px;
+  width: min(860px, 100%); max-height: 100%;
+  padding: 16px; border-radius: 10px;
+  background: var(--bg-raised); box-shadow: var(--shadow);
+}
+.modal h3 { margin: 0; font-size: 15px; }
+.modal p { margin: 0; font-size: 13px; color: var(--fg-muted); }
+.modal textarea { flex: 1; min-height: 340px; font-family: var(--mono); font-size: 12px; }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 200; padding: 9px 16px; border-radius: 8px;
+  background: var(--fg); color: var(--bg);
+  font-size: 13px; font-weight: 500; box-shadow: var(--shadow);
+}
+
+kbd {
+  padding: 1px 5px; border: 1px solid var(--border); border-bottom-width: 2px;
+  border-radius: 4px; background: var(--bg-sunken);
+  font-family: var(--mono); font-size: 10px;
+}
+</style>
+<script>
+  /* Runs before first paint to avoid a flash of the wrong theme. Light is the
+     default regardless of the OS setting; the choice is shared across reviews. */
+  (function () {
+    var t = "light";
+    try { if (localStorage.getItem("diff-review:theme") === "dark") t = "dark"; } catch (e) {}
+    document.documentElement.setAttribute("data-theme", t);
+    try {
+      var w = parseInt(localStorage.getItem("diff-review:sidebar"), 10);
+      if (w >= 200 && w <= 700) document.documentElement.style.setProperty("--sidebar-w", w + "px");
+    } catch (e) {}
+  })();
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* The generator replaces the literal below with the review payload.
+   Kept as a swappable expression so this file stays openable on its own,
+   and so a server could later supply the same shape via window.__REVIEW__. */
+const REVIEW = (typeof window !== "undefined" && window.__REVIEW__) || /*__REVIEW_DATA__*/ null;
+
+(function () {
+  "use strict";
+
+  const app = document.getElementById("app");
+
+  if (!REVIEW) {
+    app.innerHTML =
+      '<div style="padding:40px;max-width:620px;margin:0 auto;font:14px/1.6 var(--sans)">' +
+      "<h1 style=\"font-size:18px\">Diff Review — template</h1>" +
+      "<p>No review payload. This file is the template; run the generator to produce a review:</p>" +
+      '<pre style="padding:12px;border-radius:6px;background:var(--bg-hover);overflow-x:auto">' +
+      "node ~/.claude/skills/diff-review/generate.mjs --repo &lt;path&gt;</pre></div>";
+    return;
+  }
+
+  /* ------------------------------------------------------------------ state */
+
+  const STORE_KEY = "diff-review:" + REVIEW.meta.reviewId;
+  const THEME_KEY = "diff-review:theme";
+  const SIDEBAR_KEY = "diff-review:sidebar";
+  const KEY_PREFIX = "diff-review:";
+  // Entries with no comments are just viewed/collapse dust; ones holding
+  // comments are work product, so they get a much longer grace period.
+  const GC_DAYS_EMPTY = 7;
+  const GC_DAYS_COMMENTED = 30;
+  let storageOK = true;
+
+  const state = {
+    comments: [],   // {id, kind:'line'|'file', path, side, lineNum, lineContent, hunkHeader, body}
+    summary: "",
+    viewed: {},     // path -> true
+    wrap: false,
+    filter: "",
+    collapsedDirs: {},  // tree path -> true
+    // paths whose diff body has been rendered (lazy for big reviews)
+    expanded: {},
+  };
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw);
+        state.comments = Array.isArray(saved.comments) ? saved.comments : [];
+        state.summary = typeof saved.summary === "string" ? saved.summary : "";
+        state.viewed = saved.viewed || {};
+        state.wrap = !!saved.wrap;
+        state.collapsedDirs = saved.collapsedDirs || {};
+      }
+    } catch (e) {
+      storageOK = false;
+    }
+  }
+
+  /* One entry accumulates per branch reviewed, so sweep old ones on load. */
+  function gcStore() {
+    if (!storageOK) return;
+    let keys;
+    try { keys = Object.keys(localStorage); } catch (e) { return; }
+    const now = Date.now();
+    for (const key of keys) {
+      if (key.indexOf(KEY_PREFIX) !== 0) continue;
+      if (key === THEME_KEY || key === SIDEBAR_KEY || key === STORE_KEY) continue;
+      let entry;
+      try { entry = JSON.parse(localStorage.getItem(key)); } catch (e) { continue; }
+      if (!entry || typeof entry !== "object") continue;
+      if (!entry.savedAt) {
+        // Written before entries carried a timestamp. Date it now rather than
+        // deleting, so this sweep can never eat pre-existing comments.
+        entry.savedAt = new Date(now).toISOString();
+        try { localStorage.setItem(key, JSON.stringify(entry)); } catch (e) { /* full */ }
+        continue;
+      }
+      const age = now - Date.parse(entry.savedAt);
+      if (!(age > 0)) continue;   // unparseable date: leave it alone
+      const days = entry.comments && entry.comments.length ? GC_DAYS_COMMENTED : GC_DAYS_EMPTY;
+      if (age > days * 86400000) {
+        try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+      }
+    }
+  }
+
+  /* Opening a review counts as activity, so it doesn't age out while you're
+     still using it. Deliberately does not create an entry for a review you
+     only looked at — that would add dust rather than remove it. */
+  function touchStore() {
+    if (!storageOK) return;
+    try {
+      if (localStorage.getItem(STORE_KEY) !== null) save();
+    } catch (e) { /* ignore */ }
+  }
+
+  function save() {
+    if (!storageOK) return;
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        comments: state.comments,
+        summary: state.summary,
+        viewed: state.viewed,
+        wrap: state.wrap,
+        collapsedDirs: state.collapsedDirs,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (e) {
+      storageOK = false;
+      renderNotice();
+    }
+  }
+
+  /* ------------------------------------------------------------- diff index */
+
+  const byPath = new Map();
+  for (const f of REVIEW.files) byPath.set(f.path, f);
+
+  // Flatten every diff line once so comments can be re-anchored and quoted.
+  function indexFile(f) {
+    if (f._index) return f._index;
+    const rows = [];
+    for (const h of f.hunks || []) {
+      for (const l of h.lines) rows.push({ line: l, hunk: h });
+    }
+    f._index = rows;
+    return rows;
+  }
+
+  function findRow(f, side, lineNum) {
+    for (const r of indexFile(f)) {
+      const n = side === "old" ? r.line.oldNum : r.line.newNum;
+      if (n === lineNum) return r;
+    }
+    return null;
+  }
+
+  /* Re-anchor a stored comment against the current diff. A line number alone
+     goes stale as soon as the branch moves, so we trust the line text too. */
+  function resolve(c) {
+    const f = byPath.get(c.path);
+    if (!f) return { file: null, status: "orphan" };
+    const exact = findRow(f, c.side, c.lineNum);
+    if (exact && exact.line.content === c.lineContent) {
+      return { file: f, row: exact, status: "ok" };
+    }
+    if (c.lineContent) {
+      const hits = indexFile(f).filter(function (r) { return r.line.content === c.lineContent; });
+      if (hits.length === 1) {
+        const r = hits[0];
+        const n = c.side === "old" ? r.line.oldNum : r.line.newNum;
+        return { file: f, row: r, status: "moved", newLineNum: n };
+      }
+    }
+    if (exact) return { file: f, row: exact, status: "ok" };
+    return { file: f, status: "orphan" };
+  }
+
+  function commentsFor(path) {
+    return state.comments.filter(function (c) { return c.path === path; });
+  }
+
+  /* ---------------------------------------------------------------- helpers */
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+  function el(tag, cls, html) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+  function splitPath(p) {
+    const i = p.lastIndexOf("/");
+    return i < 0 ? { dir: "", name: p } : { dir: p.slice(0, i + 1), name: p.slice(i + 1) };
+  }
+  const SVG_OPEN = '<svg class="icon ICON_CLASS" viewBox="0 0 16 16" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" ' +
+    'aria-hidden="true">';
+
+  /* A page outline plus a glyph naming the change: + added, − deleted,
+     • modified, → renamed. */
+  function fileIcon(status) {
+    const glyph = {
+      added: '<path d="M8.1 7.6v3.8M6.2 9.5h3.8"/>',
+      deleted: '<path d="M6.2 9.5h3.8"/>',
+      renamed: '<path d="M6.1 9.5h3.5M8.35 8.25 9.7 9.5l-1.35 1.25"/>',
+      modified: '<circle cx="8.1" cy="9.5" r="1.15" fill="currentColor" stroke="none"/>',
+    }[status] || "";
+    return SVG_OPEN.replace("ICON_CLASS", status) +
+      '<path d="M4 1.9h5l3.2 3.2v9H4z"/><path d="M9 1.9V5.1h3.2"/>' + glyph + "</svg>";
+  }
+
+  function folderIcon() {
+    return SVG_OPEN.replace("ICON_CLASS", "folder") +
+      '<path d="M2.1 3.7h4.05l1.35 1.7h6.4v7.1H2.1z"/></svg>';
+  }
+  function uid() {
+    return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    const old = document.querySelector(".toast");
+    if (old) old.remove();
+    const t = el("div", "toast", esc(msg));
+    document.body.appendChild(t);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.remove(); }, 2600);
+  }
+
+  /* ------------------------------------------------------------------ chrome */
+
+  const totalAdd = REVIEW.files.reduce(function (a, f) { return a + f.additions; }, 0);
+  const totalDel = REVIEW.files.reduce(function (a, f) { return a + f.deletions; }, 0);
+
+  app.innerHTML =
+    '<div class="topbar">' +
+      '<div class="id">' +
+        '<div class="repo"><span>' + esc(REVIEW.meta.repo) + "</span>" +
+          '<span class="refs">' + esc(REVIEW.meta.headLabel) + " ← " + esc(REVIEW.meta.base) + "</span></div>" +
+        '<div class="sub">' + REVIEW.files.length + " file" + (REVIEW.files.length === 1 ? "" : "s") +
+          ' · <span style="color:var(--green)">+' + totalAdd + "</span> " +
+          '<span style="color:var(--red)">−' + totalDel + "</span>" +
+          (REVIEW.meta.scopeLabel ? " · " + esc(REVIEW.meta.scopeLabel) : "") +
+        "</div>" +
+      "</div>" +
+      '<div class="spacer"></div>' +
+      '<button class="btn subtle" id="btn-theme"></button>' +
+      '<button class="btn subtle" id="btn-wrap">Soft wrap</button>' +
+      '<button class="btn subtle" id="btn-clear">Clear</button>' +
+      '<button class="btn primary" id="btn-copy">Copy Prompt <span class="count" id="ccount">0</span></button>' +
+    "</div>" +
+    '<div class="main">' +
+      '<aside class="sidebar">' +
+        "<h2>Files changed</h2>" +
+        '<div class="filter"><input type="search" id="filter" placeholder="Filter files…" autocomplete="off"></div>' +
+        '<div id="filelist"></div>' +
+        '<div class="resizer" id="resizer" title="Drag to resize"></div>' +
+      "</aside>" +
+      '<div class="content">' +
+        '<div id="notice"></div>' +
+        '<section class="summary">' +
+          "<header><span>Review summary</span>" +
+          '<span style="margin-left:auto;font-weight:400;font-size:11px;color:var(--fg-subtle)">Overall notes, included at the top of the prompt</span></header>' +
+          '<div class="body"><textarea id="summary" placeholder="Optional. Anything that applies to the change as a whole…"></textarea></div>' +
+        "</section>" +
+        '<div id="files"></div>' +
+        '<div style="padding:8px 2px 40px;font-size:12px;color:var(--fg-subtle)">' +
+          "<kbd>j</kbd>/<kbd>k</kbd> next/prev file · <kbd>c</kbd> copy prompt · <kbd>⌘</kbd>+<kbd>↵</kbd> save a comment" +
+        "</div>" +
+      "</div>" +
+    "</div>";
+
+  const fileListEl = document.getElementById("filelist");
+  const filesEl = document.getElementById("files");
+  const summaryEl = document.getElementById("summary");
+  const noticeEl = document.getElementById("notice");
+  const ccountEl = document.getElementById("ccount");
+
+  function renderNotice() {
+    const bits = [];
+    if (!storageOK) {
+      bits.push("This browser is blocking local storage, so comments live only in this tab. " +
+                "Copy the prompt before reloading.");
+    }
+    for (const note of REVIEW.meta.notes || []) bits.push(note);
+    noticeEl.innerHTML = bits.length ? '<div class="notice">' + bits.map(esc).join("<br>") + "</div>" : "";
+  }
+
+
+  /* ------------------------------------------------------- syntax colouring */
+
+  /* Every diff line is its own DOM row, so a whole-file highlighter can't be
+     used here. This scans a single line and returns the state it ended in
+     ("block" inside /* *\/, "tmpl" inside a template literal); the caller
+     threads that into the next line. */
+
+  const LANGS = (function () {
+    const words = (s) => new Set(s.split(/\s+/).filter(Boolean));
+
+    const JS = words(`await break case catch class const continue debugger default delete do else
+      enum export extends false finally for from function if implements import in instanceof
+      interface let new null of package private protected public return static super switch this
+      throw true try typeof var void while with yield async as satisfies keyof readonly infer is
+      declare namespace type abstract override never unknown any string number boolean symbol
+      undefined object global require module exports`);
+    const KT = words(`as break by class companion const constructor continue crossinline data do
+      dynamic else enum expect external false final finally for fun get if import in infix init
+      inline inner interface internal is lateinit noinline null object open operator out override
+      package private protected public reified return sealed set super suspend tailrec this throw
+      true try typealias val var vararg when where while annotation abstract actual`);
+    const PHP = words(`abstract and array as break callable case catch class clone const continue
+      declare default do echo else elseif empty enddeclare endfor endforeach endif endswitch
+      endwhile enum extends final finally fn for foreach function global goto if implements include
+      include_once instanceof insteadof interface isset list match namespace new null or print
+      private protected public readonly require require_once return static switch throw trait try
+      unset use var while xor yield true false int float string bool void self parent`);
+    const PY = words(`and as assert async await break class continue def del elif else except
+      False finally for from global if import in is lambda None nonlocal not or pass raise return
+      True try while with yield match case self`);
+    const JAVA = words(`abstract assert boolean break byte case catch char class const continue
+      default do double else enum extends final finally float for goto if implements import
+      instanceof int interface long native new package private protected public return short
+      static strictfp super switch synchronized this throw throws transient try void volatile
+      while var record sealed true false null`);
+    const GO = words(`break case chan const continue default defer else fallthrough for func go
+      goto if import interface map package range return select struct switch type var true false
+      nil iota string int int64 float64 bool byte rune error`);
+    const SWIFT = words(`associatedtype class deinit enum extension fileprivate func import init
+      inout internal let open operator private precedencegroup protocol public rethrows static
+      struct subscript typealias var where while repeat guard defer do else if in for return
+      switch case break continue default fallthrough throw throws try catch as is any some nil
+      true false self Self super lazy weak unowned mutating override final convenience required`);
+    const SQL = words(`select from where group by order having limit offset insert into values
+      update set delete create table alter drop index view join inner left right outer full on as
+      and or not null is distinct union all case when then else end exists in between like asc
+      desc primary key foreign references default unique constraint cascade begin commit rollback
+      with returning count sum avg min max`);
+    const SH = words(`if then elif else fi for while do done case esac in function return exit
+      export local readonly set unset shift source echo cd test true false break continue`);
+    const CSS = words(`important inherit initial unset none auto var calc rgb rgba hsl hsla url
+      and not only screen print media supports keyframes from to import charset font-face`);
+
+    const c = (kw, extra) => Object.assign(
+      { line: "//", block: ["/*", "*/"], quotes: "'\"", kw: kw, caps: true }, extra || {});
+
+    const js = c(JS, { quotes: "'\"`", jsx: true, at: true });
+    const kt = c(KT, { at: true });
+    const php = c(PHP, { dollar: true, hash: true });
+    const css = { line: "//", block: ["/*", "*/"], quotes: "'\"", kw: CSS, caps: false };
+    const hash = (kw) => ({ line: "#", block: null, quotes: "'\"", kw: kw, caps: true });
+    const markup = { block: ["<!--", "-->"], quotes: "'\"", kw: new Set(), jsx: true, caps: false };
+
+    return {
+      js: js, jsx: js, mjs: js, cjs: js, ts: js, tsx: js, mts: js, cts: js, vue: js, svelte: js,
+      kt: kt, kts: kt, java: c(JAVA, { at: true }), scala: c(JAVA, { at: true }),
+      go: c(GO), rs: c(JS), swift: c(SWIFT, { at: true }),
+      php: php, py: hash(PY), rb: hash(PY), sh: hash(SH), bash: hash(SH), zsh: hash(SH),
+      yml: hash(new Set(["true", "false", "null", "yes", "no", "on", "off"])),
+      yaml: hash(new Set(["true", "false", "null", "yes", "no", "on", "off"])),
+      toml: hash(new Set(["true", "false"])),
+      css: css, scss: css, less: css, sass: css,
+      json: { line: null, block: null, quotes: "\"", kw: words("true false null"), caps: false },
+      sql: { line: "--", block: ["/*", "*/"], quotes: "'\"", kw: SQL, caps: false, nocase: true },
+      html: markup, htm: markup, xml: markup, svg: markup,
+    };
+  })();
+
+  const MAYBE_TOKEN = /[A-Za-z0-9_$@<'"`\/#*-]/;
+  const WORD_START = /[A-Za-z_]/;
+  const WORD_CHAR = /[A-Za-z0-9_]/;
+
+  function langFor(path) {
+    const m = /\.([A-Za-z0-9]+)$/.exec(path);
+    return m ? LANGS[m[1].toLowerCase()] || null : null;
+  }
+
+  function stringEnd(s, from, q) {
+    for (let i = from; i < s.length; i++) {
+      if (s[i] === "\\") { i++; continue; }
+      if (s[i] === q) return i;
+    }
+    return -1;
+  }
+
+  /* Returns { html, st }. Long lines skip highlighting so a minified file
+     can't stall the render. */
+  function hl(src, lang, st) {
+    if (!lang || src.length > 2000) return { html: esc(src), st: null };
+
+    let out = "";
+    let i = 0;
+    const n = src.length;
+    function push(cls, text) {
+      out += cls ? '<span class="tok-' + cls + '">' + esc(text) + "</span>" : esc(text);
+    }
+
+    if (st === "block" && lang.block) {
+      const end = src.indexOf(lang.block[1]);
+      if (end < 0) { push("comment", src); return { html: out, st: "block" }; }
+      push("comment", src.slice(0, end + lang.block[1].length));
+      i = end + lang.block[1].length;
+      st = null;
+    } else if (st === "tmpl") {
+      const end = stringEnd(src, 0, "`");
+      if (end < 0) { push("string", src); return { html: out, st: "tmpl" }; }
+      push("string", src.slice(0, end + 1));
+      i = end + 1;
+      st = null;
+    }
+
+    while (i < n) {
+      const ch = src[i];
+      const prev = i > 0 ? src[i - 1] : "";
+
+      if (lang.line && src.startsWith(lang.line, i)) { push("comment", src.slice(i)); i = n; break; }
+      if (lang.hash && ch === "#") { push("comment", src.slice(i)); i = n; break; }
+
+      if (lang.block && src.startsWith(lang.block[0], i)) {
+        const end = src.indexOf(lang.block[1], i + lang.block[0].length);
+        if (end < 0) { push("comment", src.slice(i)); return { html: out, st: "block" }; }
+        push("comment", src.slice(i, end + lang.block[1].length));
+        i = end + lang.block[1].length;
+        continue;
+      }
+
+      if (lang.quotes && lang.quotes.indexOf(ch) >= 0) {
+        const end = stringEnd(src, i + 1, ch);
+        if (end < 0) {
+          push("string", src.slice(i));
+          return { html: out, st: ch === "`" ? "tmpl" : null };
+        }
+        push("string", src.slice(i, end + 1));
+        i = end + 1;
+        continue;
+      }
+
+      if (ch >= "0" && ch <= "9" && !WORD_CHAR.test(prev)) {
+        let j = i;
+        while (j < n && /[0-9a-fA-FxXoObB._]/.test(src[j])) j++;
+        push("num", src.slice(i, j)); i = j; continue;
+      }
+
+      // JSX / markup element names.
+      if (lang.jsx && ch === "<" && /[A-Za-z/]/.test(src[i + 1] || "") && !WORD_CHAR.test(prev)) {
+        let j = i + 1;
+        if (src[j] === "/") j++;
+        const s0 = j;
+        while (j < n && /[A-Za-z0-9_.$:-]/.test(src[j])) j++;
+        if (j > s0) {
+          push(null, src.slice(i, s0));
+          push("tag", src.slice(s0, j));
+          i = j; continue;
+        }
+      }
+
+      if (lang.dollar && ch === "$" && WORD_START.test(src[i + 1] || "")) {
+        let j = i + 1;
+        while (j < n && WORD_CHAR.test(src[j])) j++;
+        push("var", src.slice(i, j)); i = j; continue;
+      }
+
+      if (lang.at && ch === "@" && WORD_START.test(src[i + 1] || "")) {
+        let j = i + 1;
+        while (j < n && WORD_CHAR.test(src[j])) j++;
+        push("meta", src.slice(i, j)); i = j; continue;
+      }
+
+      if (WORD_START.test(ch)) {
+        let j = i;
+        while (j < n && WORD_CHAR.test(src[j])) j++;
+        const w = src.slice(i, j);
+        let cls = null;
+        if (lang.kw.has(w) || (lang.nocase && lang.kw.has(w.toLowerCase()))) cls = "kw";
+        else if (src[j] === "(") cls = "fn";
+        else if (lang.caps && /^[A-Z][A-Za-z0-9_]*$/.test(w) && w !== w.toUpperCase()) cls = "type";
+        push(cls, w); i = j; continue;
+      }
+
+      let j = i + 1;
+      while (j < n && !MAYBE_TOKEN.test(src[j])) j++;
+      push(null, src.slice(i, j));
+      i = j;
+    }
+    return { html: out, st: null };
+  }
+
+  /* -------------------------------------------------------------- rendering */
+
+  function buildTree(files) {
+    const root = { name: "", path: "", dirs: new Map(), files: [] };
+    for (const f of files) {
+      const parts = f.path.split("/");
+      const name = parts.pop();
+      let node = root;
+      let acc = "";
+      for (const part of parts) {
+        acc = acc ? acc + "/" + part : part;
+        if (!node.dirs.has(part)) {
+          node.dirs.set(part, { name: part, path: acc, dirs: new Map(), files: [] });
+        }
+        node = node.dirs.get(part);
+      }
+      node.files.push({ f: f, name: name });
+    }
+    collapseChains(root);
+    return root;
+  }
+
+  /* A monorepo path like packages/shared/components/FormField is one rung of
+     the hierarchy, not four, so fold single-child chains into one row. */
+  function collapseChains(node) {
+    for (const key of [...node.dirs.keys()]) {
+      let d = node.dirs.get(key);
+      while (d.dirs.size === 1 && d.files.length === 0) {
+        const only = d.dirs.values().next().value;
+        d = { name: d.name + "/" + only.name, path: only.path, dirs: only.dirs, files: only.files };
+      }
+      node.dirs.set(key, d);
+      collapseChains(d);
+    }
+  }
+
+  function dirStats(node) {
+    let add = 0, del = 0, comments = 0;
+    for (const it of node.files) {
+      add += it.f.additions;
+      del += it.f.deletions;
+      comments += commentsFor(it.f.path).length;
+    }
+    for (const d of node.dirs.values()) {
+      const sub = dirStats(d);
+      add += sub.add; del += sub.del; comments += sub.comments;
+    }
+    return { add: add, del: del, comments: comments };
+  }
+
+  function renderSidebar() {
+    const q = state.filter.trim().toLowerCase();
+    const matches = q
+      ? REVIEW.files.filter(function (f) { return f.path.toLowerCase().indexOf(q) >= 0; })
+      : REVIEW.files;
+
+    fileListEl.innerHTML = "";
+    if (!matches.length) {
+      fileListEl.appendChild(el("div", "treeempty", "No matching files"));
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    renderNode(buildTree(matches), frag, !!q);
+    fileListEl.appendChild(frag);
+  }
+
+  function renderNode(node, into, forceOpen) {
+    for (const dir of node.dirs.values()) {
+      const open = forceOpen || !state.collapsedDirs[dir.path];
+      const st = dirStats(dir);
+      const row = el("button", "dirrow");
+      row.innerHTML =
+        '<span class="tw">' + (open ? "▾" : "▸") + "</span>" +
+        folderIcon() +
+        '<span class="dname" title="' + esc(dir.path) + '">' + esc(dir.name) + "</span>" +
+        (open
+          ? "<span></span>"
+          : '<span class="delta"><span class="p">+' + st.add + '</span> <span class="m">−' + st.del + "</span></span>") +
+        (!open && st.comments ? '<span class="cbadge">' + st.comments + "</span>" : "<span></span>");
+      row.addEventListener("click", function () {
+        if (state.collapsedDirs[dir.path]) delete state.collapsedDirs[dir.path];
+        else state.collapsedDirs[dir.path] = true;
+        save();
+        renderSidebar();
+      });
+      into.appendChild(row);
+      if (open) {
+        const kids = el("div", "treekids");
+        renderNode(dir, kids, forceOpen);
+        into.appendChild(kids);
+      }
+    }
+    for (const it of node.files) into.appendChild(fileRow(it.f, it.name));
+  }
+
+  function fileRow(f, name) {
+    const n = commentsFor(f.path).length;
+    const row = el("button", "filerow" + (state.viewed[f.path] ? " viewed" : ""));
+    row.dataset.path = f.path;
+    row.innerHTML =
+      "<span></span>" +
+      fileIcon(f.status) +
+      '<span class="fname" title="' + esc(f.path) + '">' + esc(name) + "</span>" +
+      '<span class="delta"><span class="p">+' + f.additions + '</span> <span class="m">−' + f.deletions + "</span></span>" +
+      (n ? '<span class="cbadge">' + n + "</span>" : "<span></span>");
+    row.addEventListener("click", function () { gotoFile(f.path); });
+    return row;
+  }
+
+  function renderFiles() {
+    filesEl.innerHTML = "";
+    for (const f of REVIEW.files) {
+      filesEl.appendChild(fileCard(f));
+    }
+  }
+
+  function fileCard(f) {
+    const card = el("section", "file");
+    card.id = "file-" + cssId(f.path);
+    card.dataset.path = f.path;
+
+    const { dir, name } = splitPath(f.path);
+    const head = el("header");
+    head.innerHTML =
+      '<button class="chev" title="Collapse">▾</button>' +
+      '<span class="path"><span class="dir">' + esc(dir) + "</span>" + esc(name) + "</span>" +
+      (f.oldPath ? '<span class="oldpath">was ' + esc(f.oldPath) + "</span>" : "") +
+      '<span class="delta"><span class="p">+' + f.additions + '</span> <span class="m">−' + f.deletions + "</span></span>" +
+      '<div class="spacer"></div>' +
+      '<button class="btn subtle btn-filecomment">Comment</button>' +
+      '<label class="viewedbox"><input type="checkbox" class="viewedchk">Viewed</label>';
+    card.appendChild(head);
+
+    const slot = el("div", "file-comments");
+    card.appendChild(slot);
+
+    const body = el("div", "diffbody" + (state.wrap ? " wrap" : ""));
+    card.appendChild(body);
+
+    const chk = head.querySelector(".viewedchk");
+    chk.checked = !!state.viewed[f.path];
+    chk.addEventListener("change", function () {
+      if (chk.checked) state.viewed[f.path] = true;
+      else delete state.viewed[f.path];
+      setCollapsed(card, chk.checked);
+      save();
+      renderSidebar();
+    });
+
+    head.querySelector(".chev").addEventListener("click", function () {
+      setCollapsed(card, !card.classList.contains("collapsed"));
+    });
+
+    head.querySelector(".btn-filecomment").addEventListener("click", function () {
+      setCollapsed(card, false);
+      openComposer(slot, { kind: "file", path: f.path });
+    });
+
+    // Everything starts open; only a file you ticked as Viewed comes back
+    // collapsed, so a re-generated review reopens where you left off.
+    // Measured: 12k rows build in ~200ms and lay out in ~375ms, so there is no
+    // case for collapsing large reviews by default.
+    if (state.viewed[f.path]) setCollapsed(card, true);
+    else renderBody(card);
+
+    renderFileComments(card);
+    return card;
+  }
+
+  function cssId(p) { return p.replace(/[^a-zA-Z0-9_-]/g, "_"); }
+
+  function setCollapsed(card, collapsed) {
+    card.classList.toggle("collapsed", collapsed);
+    const body = card.querySelector(".diffbody");
+    body.hidden = collapsed;
+    card.querySelector(".chev").textContent = collapsed ? "▸" : "▾";
+    if (!collapsed) renderBody(card);
+  }
+
+  function renderBody(card) {
+    if (state.expanded[card.dataset.path]) return;
+    state.expanded[card.dataset.path] = true;
+    const f = byPath.get(card.dataset.path);
+    const body = card.querySelector(".diffbody");
+    body.innerHTML = "";
+
+    if (f.binary) {
+      body.appendChild(el("div", "binary", "Binary file — no line-level diff. Use <b>Comment</b> in the header to leave a note."));
+      return;
+    }
+    if (!f.hunks || !f.hunks.length) {
+      body.appendChild(el("div", "empty-file",
+        f.status === "renamed" ? "Renamed with no content change." : "No textual changes."));
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    const lang = langFor(f.path);
+    // Added and removed lines are alternate realities, so each side carries its
+    // own tokeniser state; hunks aren't contiguous, so both reset per hunk.
+    let stNew = null, stOld = null;
+    for (const h of f.hunks) {
+      frag.appendChild(el("div", "hunkhdr", esc(h.header)));
+      stNew = null;
+      stOld = null;
+      for (const l of h.lines) {
+        let r;
+        if (l.type === "add") { r = hl(l.content, lang, stNew); stNew = r.st; }
+        else if (l.type === "del") { r = hl(l.content, lang, stOld); stOld = r.st; }
+        else { r = hl(l.content, lang, stNew); stNew = r.st; stOld = r.st; }
+        frag.appendChild(lineRow(f, h, l, r.html));
+        frag.appendChild(slotFor(f.path, l));
+      }
+    }
+    body.appendChild(frag);
+    paintThreads(f.path);
+  }
+
+  function sideOf(l) { return l.type === "del" ? "old" : "new"; }
+  function numOf(l) { return l.type === "del" ? l.oldNum : l.newNum; }
+
+  function slotKey(path, l) { return cssId(path) + ":" + sideOf(l) + ":" + numOf(l); }
+
+  function slotFor(path, l) {
+    const s = el("div", "inline-slot");
+    s.dataset.slot = slotKey(path, l);
+    return s;
+  }
+
+  function lineRow(f, h, l, codeHtml) {
+    const row = el("div", "row " + l.type);
+    row.dataset.side = sideOf(l);
+    row.dataset.num = String(numOf(l));
+    const mk = l.type === "add" ? "+" : l.type === "del" ? "-" : " ";
+    row.innerHTML =
+      '<div class="ln">' + (l.oldNum == null ? "" : l.oldNum) + "</div>" +
+      '<div class="ln">' + (l.newNum == null ? "" : l.newNum) + "</div>" +
+      '<div class="plus"><button title="Comment on this line">+</button></div>' +
+      '<div class="code"><span class="mk">' + mk + "</span>" + codeHtml + "</div>";
+    row.querySelector(".plus button").addEventListener("click", function () {
+      const slot = f._card.querySelector('[data-slot="' + slotKey(f.path, l) + '"]');
+      openComposer(slot, {
+        kind: "line",
+        path: f.path,
+        side: sideOf(l),
+        lineNum: numOf(l),
+        lineContent: l.content,
+        hunkHeader: h.header,
+      });
+    });
+    return row;
+  }
+
+  /* ---------------------------------------------------------------- threads */
+
+  function renderFileComments(card) {
+    const path = card.dataset.path;
+    const slot = card.querySelector(".file-comments");
+    slot.querySelectorAll(".comment").forEach(function (n) { n.remove(); });
+    for (const c of commentsFor(path)) {
+      if (c.kind !== "file") continue;
+      slot.appendChild(commentCard(c, resolve(c)));
+    }
+    paintThreads(path);
+  }
+
+  function paintThreads(path) {
+    const card = byPath.get(path) && byPath.get(path)._card;
+    if (!card) return;
+    card.querySelectorAll(".inline-slot .comment").forEach(function (n) { n.remove(); });
+    card.querySelectorAll(".row.commented").forEach(function (n) { n.classList.remove("commented"); });
+
+    const stray = [];
+    for (const c of commentsFor(path)) {
+      if (c.kind !== "line") continue;
+      const r = resolve(c);
+      const num = r.status === "moved" ? r.newLineNum : c.lineNum;
+      const key = cssId(path) + ":" + c.side + ":" + num;
+      const slot = card.querySelector('[data-slot="' + key + '"]');
+      if (slot) {
+        slot.appendChild(commentCard(c, r));
+        const row = slot.previousElementSibling;
+        if (row && row.classList.contains("row")) row.classList.add("commented");
+      } else {
+        stray.push(c);
+      }
+    }
+    // Comments whose line is gone still need somewhere to live.
+    const fileSlot = card.querySelector(".file-comments");
+    for (const c of stray) fileSlot.appendChild(commentCard(c, { status: "orphan" }));
+
+    const n = commentsFor(path).length;
+    const badge = document.querySelector('.filerow[data-path="' + cssPathSel(path) + '"] .cbadge');
+    if (badge) badge.textContent = n;
+    updateCount();
+  }
+
+  function cssPathSel(p) { return p.replace(/"/g, '\\"'); }
+
+  function commentCard(c, r) {
+    const node = el("div", "comment");
+    const anchor = c.kind === "file"
+      ? "whole file"
+      : "line " + (r.status === "moved" ? r.newLineNum : c.lineNum) + " (" + c.side + ")";
+    const tag = r.status === "moved"
+      ? '<span class="tag moved">moved from ' + c.lineNum + "</span>"
+      : r.status === "orphan"
+        ? '<span class="tag orphan">line no longer in diff</span>'
+        : "";
+    node.innerHTML =
+      "<header><span>You</span>" +
+      '<span class="anchor">' + esc(anchor) + "</span>" + tag +
+      '<span class="acts"><button class="edit">Edit</button><button class="del">Delete</button></span></header>' +
+      '<div class="text">' + esc(c.body) + "</div>";
+
+    node.querySelector(".edit").addEventListener("click", function () {
+      const holder = node.parentElement;
+      node.remove();
+      openComposer(holder, c, c.body);
+    });
+    node.querySelector(".del").addEventListener("click", function () {
+      state.comments = state.comments.filter(function (x) { return x.id !== c.id; });
+      save();
+      refreshComments(c.path);
+    });
+    return node;
+  }
+
+  function refreshComments(path) {
+    const f = byPath.get(path);
+    if (f && f._card) {
+      renderFileComments(f._card);
+      paintThreads(path);
+    }
+    renderSidebar();
+    updateCount();
+  }
+
+  /* -------------------------------------------------------------- composing */
+
+  function openComposer(holder, anchor, initial) {
+    if (!holder) return;
+    const existing = holder.querySelector(".composer");
+    if (existing) existing.remove();
+
+    const box = el("div", "composer");
+    const ctx = anchor.kind === "file"
+      ? "Comment on " + anchor.path
+      : anchor.path + ":" + anchor.lineNum + "  " + (anchor.lineContent || "").trim().slice(0, 90);
+    box.innerHTML =
+      '<div class="ctx">' + esc(ctx) + "</div>" +
+      "<textarea></textarea>" +
+      '<div class="actions"><button class="btn primary save">Save comment</button>' +
+      '<button class="btn cancel">Cancel</button>' +
+      '<span class="hint"><kbd>⌘</kbd>+<kbd>↵</kbd> to save</span></div>';
+    holder.appendChild(box);
+
+    const ta = box.querySelector("textarea");
+    ta.value = initial || "";
+    ta.focus();
+
+    function commit() {
+      const body = ta.value.trim();
+      if (!body) { close(); return; }
+      if (anchor.id) {
+        const c = state.comments.find(function (x) { return x.id === anchor.id; });
+        if (c) c.body = body;
+      } else {
+        state.comments.push({
+          id: uid(),
+          kind: anchor.kind,
+          path: anchor.path,
+          side: anchor.side || null,
+          lineNum: anchor.lineNum == null ? null : anchor.lineNum,
+          lineContent: anchor.lineContent == null ? null : anchor.lineContent,
+          hunkHeader: anchor.hunkHeader || null,
+          body: body,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      save();
+      box.remove();
+      refreshComments(anchor.path);
+    }
+    function close() {
+      box.remove();
+      refreshComments(anchor.path);
+    }
+
+    box.querySelector(".save").addEventListener("click", commit);
+    box.querySelector(".cancel").addEventListener("click", close);
+    ta.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { e.preventDefault(); close(); }
+    });
+  }
+
+  /* ----------------------------------------------------------- prompt build */
+
+  function quoteAround(c, r) {
+    const f = r.file;
+    if (!f || !r.row) return null;
+    const rows = indexFile(f);
+    const i = rows.indexOf(r.row);
+    if (i < 0) return null;
+    const from = Math.max(0, i - 3);
+    const to = Math.min(rows.length, i + 4);
+    const out = [];
+    for (let k = from; k < to; k++) {
+      const l = rows[k].line;
+      const mk = l.type === "add" ? "+" : l.type === "del" ? "-" : " ";
+      const num = l.newNum != null ? l.newNum : l.oldNum;
+      const pad = String(num == null ? "" : num).padStart(5, " ");
+      out.push((k === i ? ">" : " ") + pad + " " + mk + l.content);
+    }
+    return out.join("\n");
+  }
+
+  function extOf(p) {
+    const m = /\.([a-z0-9]+)$/i.exec(p);
+    if (!m) return "";
+    const map = { ts: "ts", tsx: "tsx", js: "js", jsx: "jsx", kt: "kotlin", php: "php",
+                  py: "python", rb: "ruby", go: "go", java: "java", swift: "swift",
+                  css: "css", scss: "scss", html: "html", json: "json", yml: "yaml",
+                  yaml: "yaml", sh: "bash", sql: "sql", md: "markdown" };
+    return map[m[1].toLowerCase()] || "";
+  }
+
+  function buildPrompt() {
+    const m = REVIEW.meta;
+    const lines = [];
+    const n = state.comments.length;
+
+    lines.push("# Diff review feedback");
+    lines.push("");
+    lines.push("I reviewed the diff for `" + m.repo + "` (`" + m.headLabel + "` against `" + m.base + "`)"
+      + (m.scopeLabel ? " — " + m.scopeLabel : "") + ".");
+    lines.push("");
+    lines.push("- Working directory: `" + m.cwd + "`");
+    lines.push("- Base: `" + m.base + "` at `" + (m.baseSha || "?").slice(0, 10) + "`");
+    if (m.headSha) lines.push("- Head at review time: `" + m.headSha.slice(0, 10) + "`");
+    lines.push("- " + n + " comment" + (n === 1 ? "" : "s") + " across "
+      + new Set(state.comments.map(function (c) { return c.path; })).size + " file(s)");
+    lines.push("");
+
+    if (state.summary.trim()) {
+      lines.push("## Overall");
+      lines.push("");
+      lines.push(state.summary.trim());
+      lines.push("");
+    }
+
+    // Group by file, in diff order.
+    const order = REVIEW.files.map(function (f) { return f.path; });
+    const paths = Array.from(new Set(state.comments.map(function (c) { return c.path; })))
+      .sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+
+    for (const p of paths) {
+      lines.push("## `" + p + "`");
+      lines.push("");
+      const cs = commentsFor(p).slice().sort(function (a, b) {
+        if (a.kind !== b.kind) return a.kind === "file" ? -1 : 1;
+        return (a.lineNum || 0) - (b.lineNum || 0);
+      });
+      for (const c of cs) {
+        const r = resolve(c);
+        if (c.kind === "file") {
+          lines.push("### Whole file");
+        } else {
+          const num = r.status === "moved" ? r.newLineNum : c.lineNum;
+          lines.push("### Line " + num + " (" + c.side + " side)"
+            + (r.status === "orphan" ? " — note: this line is no longer in the diff" : ""));
+          // Prefer the live hunk: the stored one goes stale as the branch moves.
+          const hdr = (r.row && r.row.hunk && r.row.hunk.header) || c.hunkHeader;
+          if (hdr) {
+            lines.push("");
+            lines.push("Hunk: `" + hdr + "`");
+          }
+          const quote = quoteAround(c, r);
+          if (quote) {
+            lines.push("");
+            lines.push("```" + extOf(p));
+            lines.push(quote);
+            lines.push("```");
+          } else if (c.lineContent) {
+            lines.push("");
+            lines.push("```" + extOf(p));
+            lines.push(c.lineContent);
+            lines.push("```");
+          }
+        }
+        lines.push("");
+        lines.push(c.body.trim());
+        lines.push("");
+      }
+    }
+
+    lines.push("---");
+    lines.push("");
+    lines.push("Work through each comment above. The `>` marks the line the comment is attached to.");
+    lines.push("If you think a comment is wrong or a change would be a mistake, say so with your reasoning "
+      + "rather than complying silently.");
+    return lines.join("\n");
+  }
+
+  function copyPrompt() {
+    if (!state.comments.length && !state.summary.trim()) {
+      toast("No comments yet");
+      return;
+    }
+    const text = buildPrompt();
+
+    // execCommand first: it is synchronous, so it still holds the user gesture.
+    // The async clipboard API is often blocked outright on file:// origins.
+    try {
+      const ta = el("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.top = "-1000px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      if (ok) { toast("Prompt copied — paste it to your agent"); return; }
+    } catch (e) { /* fall through */ }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { toast("Prompt copied — paste it to your agent"); },
+        function () { showPromptModal(text); }
+      );
+      return;
+    }
+    showPromptModal(text);
+  }
+
+  function showPromptModal(text) {
+    const scrim = el("div", "scrim");
+    scrim.innerHTML =
+      '<div class="modal"><h3>Copy this prompt</h3>' +
+      "<p>The browser blocked clipboard access from a local file. The text is selected — " +
+      "press <kbd>⌘</kbd>+<kbd>C</kbd>.</p>" +
+      "<textarea readonly></textarea>" +
+      '<div class="actions"><button class="btn" data-close>Close</button></div></div>';
+    const ta = scrim.querySelector("textarea");
+    ta.value = text;
+    document.body.appendChild(scrim);
+    ta.focus();
+    ta.select();
+    scrim.addEventListener("click", function (e) {
+      if (e.target === scrim || e.target.hasAttribute("data-close")) scrim.remove();
+    });
+  }
+
+  /* ----------------------------------------------------------- interactions */
+
+  function gotoFile(path) {
+    const f = byPath.get(path);
+    if (!f || !f._card) return;
+    setCollapsed(f._card, false);
+    f._card.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.querySelectorAll(".filerow.active").forEach(function (n) { n.classList.remove("active"); });
+    const row = document.querySelector('.filerow[data-path="' + cssPathSel(path) + '"]');
+    if (row) row.classList.add("active");
+  }
+
+  function updateCount() {
+    const n = state.comments.length + (state.summary.trim() ? 1 : 0);
+    ccountEl.textContent = n;
+    ccountEl.hidden = n === 0;
+  }
+
+  /* Theme lives outside STORE_KEY: it is a preference about the tool, not
+     about one review, so it carries across every review you open. */
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("diff-review:theme", t); } catch (e) { /* private window */ }
+    const btn = document.getElementById("btn-theme");
+    btn.textContent = t === "dark" ? "\u2600" : "\u263e";
+    btn.title = t === "dark" ? "Switch to light mode" : "Switch to dark mode";
+    btn.setAttribute("aria-label", btn.title);
+  }
+
+  /* Sidebar width is a tool preference like the theme, so it is stored
+     globally rather than per review. */
+  (function () {
+    const grabber = document.getElementById("resizer");
+    const MIN = 200, MAX = 700;
+    let active = false;
+
+    function setWidth(px) {
+      const w = Math.max(MIN, Math.min(MAX, Math.round(px)));
+      document.documentElement.style.setProperty("--sidebar-w", w + "px");
+      return w;
+    }
+
+    grabber.addEventListener("pointerdown", function (e) {
+      active = true;
+      grabber.classList.add("dragging");
+      document.body.classList.add("resizing");
+      grabber.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    grabber.addEventListener("pointermove", function (e) {
+      if (!active) return;
+      setWidth(e.clientX - document.querySelector(".sidebar").getBoundingClientRect().left);
+      syncTopbarHeight();
+    });
+
+    function end(e) {
+      if (!active) return;
+      active = false;
+      grabber.classList.remove("dragging");
+      document.body.classList.remove("resizing");
+      try { grabber.releasePointerCapture(e.pointerId); } catch (err) { /* already gone */ }
+      const w = getComputedStyle(document.documentElement).getPropertyValue("--sidebar-w").trim();
+      try { localStorage.setItem(SIDEBAR_KEY, parseInt(w, 10) || 340); } catch (err) { /* private */ }
+    }
+    grabber.addEventListener("pointerup", end);
+    grabber.addEventListener("pointercancel", end);
+
+    // Double-click restores the default.
+    grabber.addEventListener("dblclick", function () {
+      document.documentElement.style.removeProperty("--sidebar-w");
+      try { localStorage.removeItem(SIDEBAR_KEY); } catch (err) { /* private */ }
+    });
+  })();
+
+  document.getElementById("btn-theme").addEventListener("click", function () {
+    applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+  });
+
+  document.getElementById("btn-copy").addEventListener("click", copyPrompt);
+
+  document.getElementById("btn-wrap").addEventListener("click", function () {
+    state.wrap = !state.wrap;
+    document.querySelectorAll(".diffbody").forEach(function (b) { b.classList.toggle("wrap", state.wrap); });
+    this.classList.toggle("primary", state.wrap);
+    save();
+  });
+
+  document.getElementById("btn-clear").addEventListener("click", function () {
+    if (!state.comments.length && !state.summary) { toast("Nothing to clear"); return; }
+    if (!confirm("Delete all " + state.comments.length + " comment(s) and the summary?")) return;
+    state.comments = [];
+    state.summary = "";
+    summaryEl.value = "";
+    save();
+    REVIEW.files.forEach(function (f) { if (f._card) { renderFileComments(f._card); paintThreads(f.path); } });
+    renderSidebar();
+    updateCount();
+  });
+
+  document.getElementById("filter").addEventListener("input", function () {
+    state.filter = this.value;
+    renderSidebar();
+  });
+
+  let summaryTimer = null;
+  summaryEl.addEventListener("input", function () {
+    state.summary = this.value;
+    updateCount();
+    clearTimeout(summaryTimer);
+    summaryTimer = setTimeout(save, 400);
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "c") { e.preventDefault(); copyPrompt(); return; }
+    if (e.key !== "j" && e.key !== "k") return;
+    e.preventDefault();
+    const paths = REVIEW.files.map(function (f) { return f.path; });
+    const active = document.querySelector(".filerow.active");
+    let i = active ? paths.indexOf(active.dataset.path) : -1;
+    i = e.key === "j" ? Math.min(paths.length - 1, i + 1) : Math.max(0, i - 1);
+    gotoFile(paths[i]);
+  });
+
+  window.addEventListener("beforeunload", function (e) {
+    if (!storageOK && (state.comments.length || state.summary.trim())) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+
+  /* -------------------------------------------------------------------- boot */
+
+  function syncTopbarHeight() {
+    const h = document.querySelector(".topbar").offsetHeight;
+    document.documentElement.style.setProperty("--topbar-h", h + "px");
+  }
+  window.addEventListener("resize", syncTopbarHeight);
+
+  load();
+  gcStore();
+  touchStore();
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light");
+  syncTopbarHeight();
+  renderNotice();
+  renderFiles();
+  REVIEW.files.forEach(function (f) {
+    f._card = filesEl.querySelector('.file[data-path="' + cssPathSel(f.path) + '"]');
+  });
+  // _card is needed by the row handlers, so wire comments after cards exist.
+  REVIEW.files.forEach(function (f) { renderFileComments(f._card); });
+  renderSidebar();
+  summaryEl.value = state.summary;
+  if (state.wrap) document.getElementById("btn-wrap").classList.add("primary");
+  updateCount();
+  document.title = REVIEW.meta.repo + " · " + REVIEW.meta.headLabel + " — Diff Review";
+})();
+</script>
+</body>
+</html>
