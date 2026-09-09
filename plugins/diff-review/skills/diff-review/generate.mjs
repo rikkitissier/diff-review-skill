@@ -69,7 +69,7 @@ function usage() {
   --committed       Committed changes only; ignore working tree and untracked files
   --no-untracked    Include the working tree but not untracked files
   --out <file>      Output path (default: a temp file)
-  --no-open         Write the file but don't open a browser
+  --no-open         Write the file but don't open a viewer
   --json            Print the payload as JSON instead of writing HTML`);
 }
 
@@ -356,6 +356,7 @@ function collectPr(opts) {
   };
 }
 
+
 /* ------------------------------------------------------------------- output */
 
 /** Inline JSON safely inside a <script> element. */
@@ -405,13 +406,16 @@ function main() {
   console.error(`file://${out}`);
 
   if (opts.open) {
+    // Inside cmux the `open` shim reuses the preview surface for a given file,
+    // so repeat runs on one branch land in the same tab. Don't try to manage
+    // surfaces here: closing and reopening replaces the tab instead.
     const opener = process.platform === "darwin" ? "open"
       : process.platform === "win32" ? "start" : "xdg-open";
     const r = run(opener, [out]);
-    // Silence here was the bug: a sandboxed shell can't reach LaunchServices,
+    // Silence here was a bug: a sandboxed shell cannot reach LaunchServices,
     // so `open` fails with procNotFound and nothing ever appeared.
     if (r.status !== 0) {
-      console.error(`Could not launch a browser: ${opener} exited ${r.status}.`);
+      console.error(`Could not launch a viewer: ${opener} exited ${r.status}.`);
       if (r.err.trim()) console.error(r.err.trim().split("\n")[0]);
       console.error("Open the URL above, or rerun the open step without the Bash sandbox.");
       process.exitCode = 3;
