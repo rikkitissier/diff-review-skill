@@ -9,7 +9,7 @@
     {
       "name": "diff-review",
       "description": "Review a local diff in a GitHub-style page and hand the comments back to the agent as a prompt",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "Rikki Tissier"
       },

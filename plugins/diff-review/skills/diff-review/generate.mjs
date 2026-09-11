@@ -389,7 +389,17 @@ function main() {
   const template = readFileSync(TEMPLATE, "utf8");
   const marker = "/*__REVIEW_DATA__*/ null";
   if (!template.includes(marker)) die("template is missing the __REVIEW_DATA__ marker");
-  const html = template.replace(marker, inlineJson(review));
+  // Function replacer, not a string: a string replacement treats $&, $`, $',
+  // $1 and $$ in the payload as substitution patterns. A diff containing
+  // something like '^apps(.*)$': '<rootDir>/src/apps$1' would otherwise
+  // splice the rest of the template into the middle of the JSON.
+  const payload = inlineJson(review);
+  const html = template.replace(marker, () => payload);
+  // That failure produced a broken page with a silent exit 0, so check that
+  // what landed in the file is byte-for-byte what we meant to inject.
+  if (!html.includes(payload)) {
+    die("the review payload was altered during injection — refusing to write a broken page");
+  }
 
   const slug = `${review.meta.repo}-${review.meta.headLabel}`
     .replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
